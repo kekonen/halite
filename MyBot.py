@@ -7,8 +7,16 @@ from hlt.entity import Shipyard, Entity
 
 import random
 import logging
+logging.basicConfig(filename='app.log', filemode='w', format='%(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+
 import numpy as np
+
+import sys, os
+stderr = sys.stderr
+sys.stderr = open(os.devnull, 'w')
+
 import keras
+
 
 from keras.models import Model
 from keras.layers import Input, Dense, Conv2D, MaxPooling2D, Flatten
@@ -81,14 +89,15 @@ class DQNAgent:
 
 
 agent = DQNAgent((7, 7, 5), 2, 6)
+sys.stderr = stderr
 
-logging.info(f'kek: 1')
+logging.warning(f'kek: 1')
 
 # This game object contains the initial game state.
 game = hlt.Game()
 # Respond with your name.
 game.ready("MyPythonBot")
-logging.info(f'kek: 2')
+logging.warning(f'kek: 2')
 gap = 3
 
 def dooo(ship, what):
@@ -152,11 +161,11 @@ while True:
         state = [a_sight, np.array([ship.halite_amount, me.halite_amount])]
         
         if game.turn_number > 2:
-            logging.info(f'getting for ship {ship.id}, {predicted_command}')
             [previous_state, previous_action] = predicted_command[ship.id]
             reward = (state[1] - previous_state[1]).sum()
+            logging.info(f'getting for ship {ship.id}, reward: {reward}')
             # next_state, reward, done, _ = env.step(action)
-            
+            done = False
             agent.remember(previous_state, previous_action, reward, state, done)
         
         action = agent.act(state)
@@ -164,6 +173,7 @@ while True:
         predicted_command[ship.id] = [state, action]
         
     for ship in me.get_ships():
+        logging.info(f'Command for ship {ship.id}, c: {predicted_command[ship.id][1]}')
         command_queue.append(dooo(ship, predicted_command[ship.id][1]))
 #        command_queue.append(ship.move(Destination.North))
         continue
@@ -178,5 +188,5 @@ while True:
     game.end_turn(command_queue)
 
 
-agent.replay(32)
+# agent.replay(32)
 
