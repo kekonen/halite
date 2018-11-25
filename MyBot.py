@@ -173,11 +173,12 @@ while True:
     for ship in me.get_ships():
         a_sight = vision(ship, game_map, me)
         state = [a_sight, np.array([ship.halite_amount, me.halite_amount])]
+        logging.info(f'Ship {ship.id}, hal: {ship.halite_amount}, under: {game_map[ship.position].halite_amount}, base: {me.halite_amount}')
         
         if game.turn_number > 2:
             [previous_state, previous_action] = predicted_command[ship.id]
             reward = (state[1] - previous_state[1]).sum()
-            logging.info(f'getting for ship {ship.id}, reward: {reward}')
+            logging.info(f'getting a reward: {reward}')
             # next_state, reward, done, _ = env.step(action)
             done = False
             agent.remember(previous_state, previous_action, reward, state, done)
