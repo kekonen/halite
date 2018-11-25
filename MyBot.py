@@ -7,13 +7,27 @@ from hlt.entity import Shipyard, Entity
 
 import random
 import logging
-logging.basicConfig(filename='app.log', filemode='w', format='%(name)s - %(levelname)s - %(message)s', level=logging.INFO)
-
-import numpy as np
-
+import re
 import sys, os
 stderr = sys.stderr
 sys.stderr = open(os.devnull, 'w')
+
+LOCAL_MACHINE=True
+
+if LOCAL_MACHINE:
+    num = 0
+    for nme in os.listdir():
+        match = re.match(r'app(\d).log', nme)
+        if match:
+            num_candidate = int(match.group(1)) +1
+            if num_candidate > num:
+                num = num_candidate
+
+    logging.basicConfig(filename=f'app{num}.log', filemode='w', format='%(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+
+import numpy as np
+
+
 
 import keras
 
@@ -102,17 +116,17 @@ gap = 3
 
 def dooo(ship, what):
     if what == 0:
-        return ship.move(Direction.North)
+        return ship.move(Direction.North), 'North'
     elif what == 1:
-        return ship.move(Direction.South)
+        return ship.move(Direction.South), 'South'
     elif what == 2:
-        return ship.move(Direction.East)
+        return ship.move(Direction.East), 'East'
     elif what == 3:
-        return ship.move(Direction.West)
+        return ship.move(Direction.West), 'West'
     elif what == 4:
-        return ship.stay_still()
+        return ship.make_dropoff(), 'Dropoff'
     elif what == 5:
-        return ship.make_dropoff()
+        return ship.stay_still(), 'Still'
 
 def vision(ship, game_map, me):
     retina = np.zeros((gap*2+1, gap*2+1, 5)) #(7, 7, 5)  0:halite [0;1], 1:occupied by friend [bool], 2:occupied by enemy [bool], 3:drop point [bool], 4:shipyard [bool]
@@ -173,8 +187,9 @@ while True:
         predicted_command[ship.id] = [state, action]
         
     for ship in me.get_ships():
-        logging.info(f'Command for ship {ship.id}, c: {predicted_command[ship.id][1]}')
-        command_queue.append(dooo(ship, predicted_command[ship.id][1]))
+        command, command_name = dooo(ship, predicted_command[ship.id][1])
+        logging.info(f'Command for ship {ship.id}, c: {command_name}')
+        command_queue.append(command)
 #        command_queue.append(ship.move(Destination.North))
         continue
         
