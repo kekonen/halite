@@ -12,18 +12,22 @@ import sys, os
 stderr = sys.stderr
 sys.stderr = open(os.devnull, 'w')
 
+botName = sys.argv[1]
+
+
 LOCAL_MACHINE=True
-
 if LOCAL_MACHINE:
-    num = 0
-    for nme in os.listdir():
-        match = re.match(r'app(\d).log', nme)
-        if match:
-            num_candidate = int(match.group(1)) +1
-            if num_candidate > num:
-                num = num_candidate
+    logging.basicConfig(filename=f'app{botName}.log', filemode='w', format='%(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
-    logging.basicConfig(filename=f'app{num}.log', filemode='w', format='%(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+# if LOCAL_MACHINE:
+#     num = 0
+#     for nme in os.listdir():
+#         match = re.match(r'app(\d).log', nme)
+#         if match:
+#             num_candidate = int(match.group(1)) +1
+#             if num_candidate > num:
+#                 num = num_candidate
+#     logging.basicConfig(filename=f'app{num}.log', filemode='w', format='%(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
 import numpy as np
 
@@ -47,6 +51,10 @@ class DQNAgent:
         logging.info(f'Agent: {self.vision_size}, {self.tabular_size}')
         self.action_size = action_size
         self.memory = deque(maxlen=2000)
+        if LOCAL_MACHINE:
+            if f'botMemory{botName}.pkl' in os.listdir():
+                self.memory = pickle.load(open(f'botMemory{botName}.pkl', 'rb'))
+                
         self.gamma = 0.95    # discount rate
         self.epsilon = 1.0  # exploration rate
         self.epsilon_min = 0.01
@@ -88,12 +96,12 @@ class DQNAgent:
             return random.randrange(self.action_size)
         act_values = self.model.predict(state)
         return np.argmax(act_values[0])  # returns action
-    def replay(self, batch_size):
+    def replay(self, batch_size): # TODO: adjust for model
         minibatch = random.sample(self.memory, batch_size)
         for state, action, reward, next_state, done in minibatch:
             target = reward
             if not done:
-              target = reward + self.gamma * \
+                target = reward + self.gamma * \
                        np.amax(self.model.predict(next_state)[0])
             target_f = self.model.predict(state)
             target_f[0][action] = target
@@ -152,7 +160,7 @@ def vision(ship, game_map, me):
 
     return retina
 
-predicted_command = {}
+last_state_action = {}
 
 while True:
     # Get the latest game state.
@@ -176,7 +184,7 @@ while True:
         logging.info(f'Ship {ship.id}, hal: {ship.halite_amount}, under: {game_map[ship.position].halite_amount}, base: {me.halite_amount}')
         
         if game.turn_number > 2:
-            [previous_state, previous_action] = predicted_command[ship.id]
+            [previous_state, previous_action] = last_state_action[ship.id]
             reward = (state[1] - previous_state[1]).sum()
             logging.info(f'getting a reward: {reward}')
             # next_state, reward, done, _ = env.step(action)
@@ -185,10 +193,10 @@ while True:
         
         action = agent.act(state)
         
-        predicted_command[ship.id] = [state, action]
+        last_state_action[ship.id] = [state, action]
         
     for ship in me.get_ships():
-        command, command_name = dooo(ship, predicted_command[ship.id][1])
+        command, command_name = dooo(ship, last_state_action[ship.id][1])
         logging.info(f'Command for ship {ship.id}, c: {command_name}')
         command_queue.append(command)
 #        command_queue.append(ship.move(Destination.North))
