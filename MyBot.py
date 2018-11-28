@@ -43,74 +43,81 @@ from keras.optimizers import Adam
 
 from collections import deque
 
-class DQNAgent:
-    def __init__(self, vision_size, tabular_size, action_size):
-        self.vision_size = vision_size
-        self.tabular_size = tabular_size
+import socket, pickle
 
-        logging.info(f'Agent: {self.vision_size}, {self.tabular_size}')
-        self.action_size = action_size
-        self.memory = deque(maxlen=2000)
-        if LOCAL_MACHINE:
-            if f'botMemory{botName}.pkl' in os.listdir():
-                self.memory = pickle.load(open(f'botMemory{botName}.pkl', 'rb'))
-                
-        self.gamma = 0.95    # discount rate
-        self.epsilon = 1.0  # exploration rate
-        self.epsilon_min = 0.01
-        self.epsilon_decay = 0.995
-        self.learning_rate = 0.001
-        self.model = self._build_model()
-    def _build_model(self):
+class MemoryClient:
+    def __init__(self, SERVER_IP="127.0.0.1", SERVER_PORT=1337, ME_IP="127.0.0.1" ,ME_PORT=1337):
+        self.UDP_IP_SERVER = SERVER_IP
+        self.UDP_PORT_SERVER = SERVER_PORT
+
+        self.UDP_IP_ME = ME_IP
+        self.UDP_PORT_ME = ME_PORT
+        # self.UDP_PORT_IN  = 228
+
+
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.sock.bind((self.UDP_IP_ME, self.UDP_PORT_ME))
+
+        # self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+
+
+    def send(self, data):
+        self.sock.sendto(pickle.dumps(data), (self.UDP_IP_SERVER, self.UDP_PORT))
+        answer = self.sock.recvfrom(1024)
+        address = answer[1]
+        data = answer[0]
+
+        if data != b'kek' and data: 
+            return pickle.loads(data)
+        elif data == b'kek':
+            return True
+        # sock.sendto(message, (UDP_IP, UDP_PORT))
+
+a = MemoryClient()
+
+a.send(np.array([1,3,3,7]))
+
+
+
+class DQNAgentClient:
+    def __init__(self, SERVER_IP="127.0.0.1", SERVER_PORT=1337, ME_IP="127.0.0.1" ,ME_PORT=1338):
+        self.UDP_IP_SERVER = SERVER_IP
+        self.UDP_PORT_SERVER = SERVER_PORT
+
+        self.UDP_IP_ME = ME_IP
+        self.UDP_PORT_ME = ME_PORT
+        self.PACKAGE_SIZE = 4096
+        # self.UDP_PORT_IN  = 228
+
+
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.sock.bind((self.UDP_IP_ME, self.UDP_PORT_ME))
+
+    def _send(self, data):
         # Neural Net for Deep-Q learning Model
-        vision_input = Input(shape=self.vision_size)
-        tabluar_input = Input(shape=[self.tabular_size])
-        
-        conv1 = Conv2D(25, (3, 3), padding='same', activation='selu')(vision_input)
-        pool1 = MaxPooling2D((2, 2), strides=(1, 1), padding='same')(conv1)
-        
-        conv2 = Conv2D(16, (3, 3), padding='same', activation='selu')(pool1)
-        pool2 = MaxPooling2D((2, 2), strides=(1, 1), padding='same')(conv2)
-        
-        vision_out = Flatten()(pool2)
-        
-        concat = keras.layers.concatenate([vision_out, tabluar_input], axis=1)
-        
-        x = Dense(16, activation='selu')(concat)
-        x = Dense(16, activation='selu')(x)
-        
-        main_output = Dense(self.action_size, activation='softmax')(x)
-        model = Model(inputs=[vision_input, tabluar_input], outputs=main_output)
-        
-#        model = Sequential()
-#        model.add(Dense(24, input_dim=self.state_size, activation='relu'))
-#        model.add(Dense(24, activation='relu'))
-#        model.add(Dense(self.action_size, activation='linear'))
-        model.compile(loss='categorical_crossentropy',
-                      optimizer=Adam(lr=self.learning_rate))
-        return model
+        self.sock.sendto(pickle.dumps(data), (self.UDP_IP_SERVER, self.UDP_PORT))
+        answer = self.sock.recvfrom(self.PACKAGE_SIZE)
+        address = answer[1]
+        data = answer[0]
+
+        if data != b'kek' and data: 
+            return pickle.loads(data)
+        elif data == b'kek':
+            return True
+
     def remember(self, state, action, reward, next_state, done):
-        self.memory.append((state, action, reward, next_state, done))
+        self._send(['remember', [state, action, reward, next_state, done]])
     def act(self, state):
-        if np.random.rand() <= self.epsilon:
-            return random.randrange(self.action_size)
-        act_values = self.model.predict(state)
-        return np.argmax(act_values[0])  # returns action
+        # if np.random.rand() <= self.epsilon:
+        #     return random.randrange(self.action_size)
+        # act_values = self.model.predict(state)
+        # return np.argmax(act_values[0])  # returns action
+        return self._send(['act', state])
     def replay(self, batch_size): # TODO: adjust for model
-        minibatch = random.sample(self.memory, batch_size)
-        for state, action, reward, next_state, done in minibatch:
-            target = reward
-            if not done:
-                target = reward + self.gamma * \
-                       np.amax(self.model.predict(next_state)[0])
-            target_f = self.model.predict(state)
-            target_f[0][action] = target
-            self.model.fit(state, target_f, epochs=1, verbose=0)
-        if self.epsilon > self.epsilon_min:
-            self.epsilon *= self.epsilon_decay
+        self._send(['replay', batch_size])
 
 
-agent = DQNAgent((7, 7, 5), 2, 6)
+agent = DQNAgentClient()
 sys.stderr = stderr
 
 logging.warning(f'kek: 1')
